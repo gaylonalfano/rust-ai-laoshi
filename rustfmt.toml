@@ -1,0 +1,11 @@
+# rustfmt doc - https://rust-lang.github.io/rustfmt/
+# NOTE: This is a good file to have when doing open-source, so when
+# new commits come, this ensures everything is consistent spec.
+
+# hard_tabs = true
+edition = "2021"
+
+# For recording
+max_width = 85
+# chain_width = 40
+# array_width = 40

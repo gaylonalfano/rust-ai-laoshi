@@ -1,0 +1,11 @@
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# unused = "allow" # For experimental dev.
+
+[workspace]
+resolver = "2"
+members = [
+  "crates/ai-laoshi-cli",  # The CLI for ai-laoshi-core
+  "crates/ai-laoshi-core", # The core/main library used by ai-laoshi-cli
+  # "crates/ai-buddy-app", # (Upcoming) Tauri App
+]
