@@ -14,20 +14,20 @@ pub enum Error {
     // CannotFindThreadIdForConv(String),
     //
     // -- ais
-    // MessageImageNotSupported,
-    // NoMessageInMessageObjectContent,
-    // NoMessageFoundInMessages,
+    MessageImageNotSupported,
+    NoMessageInMessageObjectContent,
+    NoMessageFoundInMessages,
     NoOpenAIApiKeyInEnv,
     // DeleteAllFilesRequiresAtLeastOneGlob,
-    // RunError(RunStatus),
+    RunError(RunStatus),
     //
     // // -- Event
     // #[from]
     // BoadcastSend(broadcast::error::SendError<event::Event>),
     //
-    // // -- Std
-    // #[from]
-    // IO(io::Error),
+    // // -- Std/Console
+    #[from]
+    IO(io::Error),
     //
     // // -- Externals
     // #[from]
@@ -38,7 +38,10 @@ pub enum Error {
 
 // region:    --- Error Boilerplate
 impl core::fmt::Display for Error {
-    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+    fn fmt(
+        &self,
+        fmt: &mut core::fmt::Formatter,
+    ) -> core::result::Result<(), core::fmt::Error> {
         write!(fmt, "{self:?}")
     }
 }

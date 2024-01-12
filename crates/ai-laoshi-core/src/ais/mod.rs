@@ -7,6 +7,7 @@
 
 // region:       -- Modules
 pub mod assistant;
+pub mod message;
 
 use async_openai::{config::OpenAIConfig, Client};
 
