@@ -21,7 +21,6 @@ use crate::{
         assistant::{self, AssistantId, ThreadId},
     },
     laoshi::config::Config,
-    utils::files::bundle_to_file,
     Error, Result,
 };
 
@@ -30,8 +29,9 @@ use crate::{
 use async_openai::{config::OpenAIConfig, Client};
 use derive_more::{Deref, From};
 use serde::{Deserialize, Serialize};
-use simple_fs::{ensure_dir, list_files, load_toml, read_to_string, SPath};
+use simple_fs::{ensure_dir, load_toml, read_to_string, save_json, SPath};
 use std::path::{Path, PathBuf};
+use tokio::fs;
 
 // endregion:    -- Modules
 
@@ -135,17 +135,70 @@ impl Laoshi {
             // -- Return Ok(false) since we didn't have any ixs
             Ok(false)
         }
+    }
 
-        // match assistant::upload_instructions(
-        //     &self.oac,
-        //     &self.assistant_id,
-        //     ix_content,
-        // )
-        // .await?
-        // {
-        //     Ok(_) => Ok(true),
-        //     Err(_) => Err(false),
-        // }
+    // NOTE: Conversations will be serialized and stored in a conv.json
+    // file within the data_dir (agent/.agent/conv.json). This way
+    // we can persist the conversation in a way between sessions.
+    pub async fn load_or_create_conversation(
+        &self,
+        recreate: bool,
+    ) -> Result<Conversation> {
+        let conversation_file = self.data_dir()?.join("conv.json");
+
+        // -- Delete if recreate and exists
+        if recreate && conversation_file.exists() {
+            fs::remove_file(&conversation_file).await?;
+            println!("Conversation file deleted. Creating new file...");
+        }
+
+        // -- Previous conversation exists, let's load
+        // WARN: Q: What's the mental model? How to get Thread?
+        // The JSON will be something like: "thread_id": "thread_abc123"
+        // - Laoshi has Assistant
+        // - Assistant runs in a Thread and responds to user
+        // A: Yep, we parse the JSON and use our assistant::get_thread()
+        // helper!
+        let conversation = if let Ok(conversation) =
+            simple_fs::load_json::<Conversation>(&conversation_file)
+        {
+            // -- Successfully loaded and converted to Conversation; Get Conversation.thread_id
+            assistant::get_thread(&self.oac, &conversation.thread_id)
+                .await
+                .map_err(|_| {
+                    Error::CannotFindThreadIdForConv(conversation.to_string())
+                })?;
+            // println!("{} conversation loaded", icon_check());
+            println!("Conversation loaded");
+            conversation
+        } else {
+            // -- No prior Conversation or conv.json file found; Create new Conversation
+            let thread_id = assistant::create_thread(&self.oac).await?;
+            println!("Conversation created");
+            // Convert ThreadId into a Conversation struct
+            // Q: How does this work/convert? Deref? From trait?
+            let conversation = thread_id.into();
+            // Save/create the conv.json file
+            save_json(&conversation_file, &conversation)?;
+            conversation
+        };
+
+        Ok(conversation)
+    }
+
+    pub async fn chat(&self, conv: &Conversation, msg: &str) -> Result<String> {
+        // Q: What's the mental model here? We return the model response in String?
+        // A: That's exactly what our assistant::run_thread_msg() does!
+        // NOTE: Assistants don't know about our custom Conversation, only ThreadId
+        let res = assistant::run_thread_msg(
+            &self.oac,
+            &self.assistant_id,
+            &conv.thread_id,
+            msg,
+        )
+        .await?;
+
+        Ok(res)
     }
 
     // -- Private functions
