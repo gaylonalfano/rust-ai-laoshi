@@ -29,9 +29,9 @@ pub enum Error {
     #[from]
     IO(io::Error),
     //
-    // // -- Externals
-    // #[from]
-    // SimpleFs(simple_fs::Error),
+    // -- Externals
+    #[from]
+    SimpleFs(simple_fs::Error),
     #[from]
     OpenAI(OpenAIError),
 }

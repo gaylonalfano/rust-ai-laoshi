@@ -1,4 +1,4 @@
-// FIXME: This is a utility/service module that gets it state from the OAI Client,
+// NOTE:!! This is a utility/service module that gets it state from the OAI Client,
 // so no need to add extra state (trying to be stateless as possible). It's dumb.
 // Later we'll create a "Buddy" state that's a little smarter and uses these
 // Assistant services.
@@ -26,6 +26,7 @@ use async_openai::{
 };
 use console::Term;
 use derive_more::{Deref, Display, From};
+use serde::{Deserialize, Serialize};
 use std::{thread::sleep, time::Duration};
 
 // region:       -- Constants
@@ -39,6 +40,8 @@ const POLLING_DURATION_MS: u64 = 500;
 // region:       -- Types
 
 // NOTE: This is config controls our Open AI model!
+// By design, this is separate from our higher-level 'Laoshi'
+// module configuration abstraction (see laoshi/config.rs).
 pub struct CreateConfig {
     pub name: String,
     pub model: String,
@@ -54,7 +57,7 @@ pub struct CreateConfig {
 #[derive(Debug, From, Deref, Display)]
 pub struct AssistantId(String);
 
-#[derive(Debug, From, Deref, Display)]
+#[derive(Debug, From, Deref, Serialize, Deserialize, Display)]
 pub struct ThreadId(String);
 
 #[derive(Debug, From, Deref, Display)]

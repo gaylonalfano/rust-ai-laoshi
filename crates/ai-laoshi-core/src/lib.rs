@@ -1,7 +1,8 @@
 // region:       -- Modules
-pub mod ais; // ai services
+pub mod ais;
 mod error;
 mod laoshi;
+pub mod utils;
 
 pub use self::error::{Error, Result};
 

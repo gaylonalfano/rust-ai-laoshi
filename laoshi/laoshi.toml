@@ -1,0 +1,21 @@
+# This is the file our Laoshi Agent will use for its config
+# Specifically, our CLI will look into this folder.
+name = "laoshi-01"
+model = "gpt-3.5-turbo-1106"
+instructions_file = "instructions.md"
+
+
+# NOTE: Currently, OAI Assistants are limited to 20 files, so it's
+# better to bundle them up and then upload.
+# TODO: Could add PDF bundle support later
+[[file_bundles]] # -- This is a TOML table array with an object that contains these properties
+bundle_name = "source-code"
+src_dir = "../crates"       # Relative to this .toml config file location
+src_globs = ["**/*.rs"]     # Array of all glob sets found in all sub-folders (**)
+dst_ext = "rs"              # The file extension of the bundle to be uploaded at destination
+
+[[file_bundles]]
+bundle_name = "knowledge"
+src_dir = "files"
+src_globs = ["*.md"]
+dst_ext = "md"

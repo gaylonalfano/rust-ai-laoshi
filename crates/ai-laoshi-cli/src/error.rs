@@ -12,13 +12,16 @@ pub enum Error {
     // // -- Externals
     // #[from]
     // IO(io::Error),
-    // #[from]
-    // Dialoguer(dialoguer::Error),
+    #[from]
+    Dialoguer(dialoguer::Error),
 }
 
 // region:    --- Error Boilerplate
 impl core::fmt::Display for Error {
-    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+    fn fmt(
+        &self,
+        fmt: &mut core::fmt::Formatter,
+    ) -> core::result::Result<(), core::fmt::Error> {
         write!(fmt, "{self:?}")
     }
 }

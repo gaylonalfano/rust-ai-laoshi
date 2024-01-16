@@ -1,7 +1,9 @@
 // region:       -- Modules
 mod error;
+mod utils;
 
 pub use self::error::{Error, Result};
+use crate::utils::cli::icon_check;
 
 use ai_laoshi_core::ais::{
     assistant::{self, CreateConfig},
@@ -47,17 +49,19 @@ async fn start() -> Result<()> {
     )
     .await?;
 
-    let thread_id = assistant::create_thread(&oac).await?;
-    let assistant_response_message = assistant::run_thread_msg(
-        &oac,
-        &assistant_id,
-        &thread_id,
-        "What is the best language?",
-    )
-    .await?;
+    // // FIXME: Currently this recreates a new thread each run. Commenting out
+    // // for now but we'll address this soon enough.
+    // let thread_id = assistant::create_thread(&oac).await?;
+    // let assistant_response_message = assistant::run_thread_msg(
+    //     &oac,
+    //     &assistant_id,
+    //     &thread_id,
+    //     "What is the best language?",
+    // )
+    // .await?;
 
     println!("->> assistant_id: {assistant_id}");
-    println!("->> result: {assistant_response_message}");
+    // println!("->> result: {assistant_response_message}");
 
     Ok(())
 }
