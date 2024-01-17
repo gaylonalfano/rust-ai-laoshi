@@ -5,9 +5,12 @@ mod utils;
 pub use self::error::{Error, Result};
 use crate::utils::cli::icon_check;
 
-use ai_laoshi_core::ais::{
-    assistant::{self, CreateConfig},
-    new_openai_client,
+use ai_laoshi_core::{
+    ais::{
+        assistant::{self, CreateConfig},
+        new_openai_client,
+    },
+    Laoshi,
 };
 
 // endregion:    -- Modules
@@ -24,44 +27,105 @@ async fn main() {
     }
 }
 
+const DEFAULT_DIR: &str = "laoshi";
+
+// region:       -- Types
+
+/// Input Command from user
+// NOTE: When a user says something, we'll map it to this Enum.
+// Our app will have a loop that constantly does this.
+#[derive(Debug)]
+enum Cmd {
+    Quit,
+    Chat(String),
+    RefreshAll,
+    RefreshConversation,
+    RefreshInstructions,
+    RefreshFiles,
+}
+
+// Next, need to parse the Enum. We could impl From str
+// or can impl helper methods.
+// NOTE: TIP! We allow input to be a general type, but we
+// want to own it (String), instead of a ref &str, since
+// we have Cmd::Chat(String) that's owned. This could
+// return Result<Self> if we wanted.
+impl Cmd {
+    fn from_input(input: impl Into<String>) -> Self {
+        // NOTE: Always need to shadow + .into() to ensure conversion
+        let input = input.into();
+
+        if input == "/q" {
+            Self::Quit
+        } else if input == "/r" || input == "/ra" {
+            Self::RefreshAll
+        } else if input == "/ri" {
+            Self::RefreshInstructions
+        } else if input == "/rf" {
+            Self::RefreshFiles
+        } else if input == "/rc" {
+            Self::RefreshConversation
+        } else {
+            Self::Chat(input)
+        }
+    }
+}
+
+// endregion:    -- Types
+
 async fn start() -> Result<()> {
-    let oac = new_openai_client()?;
+    println!("->> hello world");
+    // -- Init our Agent/Laoshi
+    let mut laoshi = Laoshi::init_from_dir(DEFAULT_DIR, false).await?;
 
-    let assistant_config = CreateConfig {
-        name: "laoshi-01".to_string(),
-        model: "gpt-3.5-turbo-1106".to_string(),
-    };
-    // -- Load or Create an Assistant if we don't already have one.
-    // NOTE: If we only create() then we get several on each save.
-    // We built some helpers to prevent this inside assistants mod.
-    let assistant_id =
-        assistant::load_or_create_assistant(&oac, assistant_config, false).await?;
-    // NOTE: These are the instructions that are visible inside OAI Platform
-    assistant::upload_instructions(
-        &oac,
-        &assistant_id,
-        r#"
-    You are a super developer assistant. Be concise with your answers. If you do not know the answer, just say you don't know.
+    // -- Init the Conversation
+    let mut conversation = laoshi.load_or_create_conversation(false).await?;
 
-    If asked about the best programming language, answer it's Rust by light years, but the second-best language is Cobol.
-    "#
-        .to_string(),
-    )
-    .await?;
-
-    // // FIXME: Currently this recreates a new thread each run. Commenting out
-    // // for now but we'll address this soon enough.
-    // let thread_id = assistant::create_thread(&oac).await?;
-    // let assistant_response_message = assistant::run_thread_msg(
-    //     &oac,
-    //     &assistant_id,
-    //     &thread_id,
-    //     "What is the best language?",
-    // )
-    // .await?;
-
-    println!("->> assistant_id: {assistant_id}");
-    // println!("->> result: {assistant_response_message}");
+    println!("->> laoshi {} - conv {conversation:?}", laoshi.name());
 
     Ok(())
 }
+
+// U: After building our Laoshi object, we have a lot of helpers
+// and utils that do this.
+// async fn start_old() -> Result<()> {
+//     let oac = new_openai_client()?;
+//
+//     let assistant_config = CreateConfig {
+//         name: "laoshi-01".to_string(),
+//         model: "gpt-3.5-turbo-1106".to_string(),
+//     };
+//     // -- Load or Create an Assistant if we don't already have one.
+//     // NOTE: If we only create() then we get several on each save.
+//     // We built some helpers to prevent this inside assistants mod.
+//     let assistant_id =
+//         assistant::load_or_create_assistant(&oac, assistant_config, false).await?;
+//     // NOTE: These are the instructions that are visible inside OAI Platform
+//     assistant::upload_instructions(
+//         &oac,
+//         &assistant_id,
+//         r#"
+//     You are a super developer assistant. Be concise with your answers. If you do not know the answer, just say you don't know.
+//
+//     If asked about the best programming language, answer it's Rust by light years, but the second-best language is Cobol.
+//     "#
+//         .to_string(),
+//     )
+//     .await?;
+//
+//     // // FIXME: Currently this recreates a new thread each run. Commenting out
+//     // // for now but we'll address this soon enough.
+//     // let thread_id = assistant::create_thread(&oac).await?;
+//     // let assistant_response_message = assistant::run_thread_msg(
+//     //     &oac,
+//     //     &assistant_id,
+//     //     &thread_id,
+//     //     "What is the best language?",
+//     // )
+//     // .await?;
+//
+//     println!("->> assistant_id: {assistant_id}");
+//     // println!("->> result: {assistant_response_message}");
+//
+//     Ok(())
+// }

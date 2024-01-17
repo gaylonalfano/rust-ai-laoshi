@@ -100,7 +100,7 @@ impl Laoshi {
         // TODO:
         // laoshi.upload_files().await?;
 
-        todo!()
+        Ok(laoshi)
     }
 
     // -- Public functions
