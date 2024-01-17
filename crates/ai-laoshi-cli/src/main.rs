@@ -3,7 +3,7 @@ mod error;
 mod utils;
 
 pub use self::error::{Error, Result};
-use crate::utils::cli::icon_check;
+use crate::utils::cli::{icon_check, icon_res, prompt, txt_res};
 
 use ai_laoshi_core::{
     ais::{
@@ -12,6 +12,7 @@ use ai_laoshi_core::{
     },
     Laoshi,
 };
+use textwrap::wrap;
 
 // endregion:    -- Modules
 
@@ -80,6 +81,29 @@ async fn start() -> Result<()> {
 
     // -- Init the Conversation
     let mut conversation = laoshi.load_or_create_conversation(false).await?;
+
+    // -- Start our app loop
+    loop {
+        println!();
+
+        let input = prompt("Ask away!")?;
+        let cmd = Cmd::from_input(input);
+
+        // Q: Match on Cmd and have agent take over?
+        // Q: How to quit? How to refresh?
+        match cmd {
+            Cmd::Chat(msg) => {
+                let res = laoshi.chat(&conversation, &msg).await?;
+                let res = wrap(&res, 80).join("\n");
+                println!("{} {}", utils::cli::icon_res(), utils::cli::txt_res(res));
+            }
+            Cmd::Quit => break,
+            other => println!(
+                "{} command not supported: {other:?}",
+                utils::cli::icon_err()
+            ),
+        }
+    }
 
     println!("->> laoshi {} - conv {conversation:?}", laoshi.name());
 

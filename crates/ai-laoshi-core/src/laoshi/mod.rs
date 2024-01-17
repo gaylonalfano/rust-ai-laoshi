@@ -24,8 +24,6 @@ use crate::{
     Error, Result,
 };
 
-// use rust-ai-laoshi::ai-laoshi-cli::utils::cli::icon_check();
-
 use async_openai::{config::OpenAIConfig, Client};
 use derive_more::{Deref, From};
 use serde::{Deserialize, Serialize};
@@ -120,15 +118,6 @@ impl Laoshi {
                 ix_content,
             )
             .await?;
-
-            println!(
-                "{} Instructions uploaded",
-                // FIXME:
-                // Q: How to use outside crate ai-laoshi-cli?
-                // Can't access ai_laoshi_cli::utils::cli::icon_check()
-                // ai_laoshi_cli::utils::cli::icon_check()
-                "✓"
-            );
 
             Ok(true)
         } else {
