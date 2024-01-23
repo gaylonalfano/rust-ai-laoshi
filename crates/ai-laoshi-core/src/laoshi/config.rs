@@ -10,14 +10,20 @@ pub(super) struct Config {
     pub model: String,
     pub instructions_file: String,
     pub file_bundles: Vec<FileBundle>,
+    // NOTE: This file_bundles Vec<FileBundle> corresponds to our laoshi.toml properties:
+    // [[file_bundles]]
+    // bundle_name = "knowledge"
+    // src_dir = "files"         # Relative to this .toml file location (i.e. -> laoshi/files)
+    // src_globs = ["*.md"]
+    // dst_ext = "md"
 }
 
 #[derive(Debug, Deserialize)]
 pub(super) struct FileBundle {
-    bundle_name: String,
-    src_dir: String,
-    src_globs: Vec<String>,
-    dst_ext: String,
+    pub bundle_name: String,
+    pub src_dir: String,
+    pub src_globs: Vec<String>,
+    pub dst_ext: String,
 }
 
 // region:       -- Froms

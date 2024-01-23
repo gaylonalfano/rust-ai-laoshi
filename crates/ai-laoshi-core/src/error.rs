@@ -10,7 +10,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, From)]
 pub enum Error {
     // -- agent (laoshi)
-    // ShouldNotDeleteLocalFile(String),
+    ShouldNotDeleteLocalFile(String),
     CannotFindThreadIdForConv(String),
     //
     // -- ais

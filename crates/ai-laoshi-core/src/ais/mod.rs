@@ -8,10 +8,14 @@
 // region:       -- Modules
 pub mod assistant;
 pub mod message;
+mod types;
 
-use async_openai::{config::OpenAIConfig, Client};
+// pub use event::AisEvent;
+pub use types::*;
 
+// use crate::event::EventBus;
 use crate::{Error, Result};
+use async_openai::{config::OpenAIConfig, Client};
 // endregion:    -- Modules
 
 // region:       -- Create Async OpenAI Client

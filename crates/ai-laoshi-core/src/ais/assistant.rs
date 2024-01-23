@@ -13,13 +13,15 @@
 
 use crate::{
     ais::message::{self, get_text_content},
+    ais::types::{AssistantId, FileId, ThreadId},
     Error, Result,
 };
 use async_openai::{
     config::OpenAIConfig,
     types::{
-        AssistantObject, AssistantToolsRetrieval, CreateAssistantRequest,
-        CreateRunRequest, CreateThreadRequest, ModifyAssistantRequest, RunStatus,
+        AssistantObject, AssistantToolsRetrieval, CreateAssistantFileRequest,
+        CreateAssistantRequest, CreateFileRequest, CreateRunRequest,
+        CreateThreadRequest, ModifyAssistantRequest, OpenAIFile, RunStatus,
         ThreadObject,
     },
     Assistants, Client,
@@ -27,7 +29,12 @@ use async_openai::{
 use console::Term;
 use derive_more::{Deref, Display, From};
 use serde::{Deserialize, Serialize};
-use std::{thread::sleep, time::Duration};
+use simple_fs::SPath;
+use std::{
+    collections::{HashMap, HashSet},
+    thread::sleep,
+    time::Duration,
+};
 
 // region:       -- Constants
 
@@ -46,22 +53,6 @@ pub struct CreateConfig {
     pub name: String,
     pub model: String,
 }
-
-// NOTE: TIP! -- Since we're going to have different objects (Assistant, Threads, etc.),
-// the last thing we want is to have 'String' as the type. This always leads to bugs
-// where pass a String ID of something into another String ID of something else.
-// Therefore, we create a separate struct AssistantId(String).
-// You could even consider using Arc<String> (you'd have to implement your own 'From'),
-// but this would make it easy to have multi tasks in async and move ID across threads.
-// REF: https://youtu.be/PHbCmIckV20?t=999
-#[derive(Debug, From, Deref, Display)]
-pub struct AssistantId(String);
-
-#[derive(Debug, From, Deref, Serialize, Deserialize, Display)]
-pub struct ThreadId(String);
-
-#[derive(Debug, From, Deref, Display)]
-pub struct FileId(String);
 
 // endregion:    -- Types
 
@@ -173,8 +164,23 @@ pub async fn delete(
     assistant_id: &AssistantId,
 ) -> Result<()> {
     let oa_assistants_obj = oac.assistants();
+    let oa_org_files_obj = oac.files();
 
-    // TODO: Delete files since our Assistant may have files associated with it
+    // -- Delete ORG files since our Assistant may have files associated with it
+    // NOTE: TIP! There's a handy HashMap.into_values()
+    for file_id in get_files_hashmap(&oac, assistant_id).await?.into_values() {
+        // NOTE: !! The file might already be deleted, so we don't
+        // have it stop/end with Err() by using '?' operator.
+        let del_res = oa_org_files_obj.delete(&file_id).await;
+        // TODO: Could consider 'match' instead & implement EventBus (AisEvent::OrgFileDeleted())
+        // REF: https://github.com/rust10x/rust-ai-buddy/blob/main/crates/ai-buddy/src/ais/asst.rs
+        if del_res.is_ok() {
+            println!("File deleted - {file_id}");
+        }
+    }
+
+    // NOTE: !! No need to delete associated/attached Assistant files since
+    // we delete the full Assistant object from OpenAI.
 
     // -- Delete the assistant
     oa_assistants_obj.delete(assistant_id).await?;
@@ -290,3 +296,146 @@ pub async fn get_first_thread_message_content(
 }
 
 // endregion:    -- Threads that Assistants can interact with
+
+// region:       -- Files
+// WARN: The OpenAI Assistants:List Assistant Files Response Obj
+// doesn't return the 'filename' property, so we need to do a bit
+// of extra work to first hit the 'Files' endpoint and then we
+// can use Assistants:List Assistant Files
+// REF: https://platform.openai.com/docs/api-reference/files/list
+// REF: https://platform.openai.com/docs/api-reference/assistants/listAssistantFiles
+// REF: https://youtu.be/PHbCmIckV20?t=8249
+
+/// Returns the file id by file name hashmap.
+pub async fn get_files_hashmap(
+    oac: &Client<OpenAIConfig>,
+    assistant_id: &AssistantId,
+) -> Result<HashMap<String, FileId>> {
+    // -- Get all assistant files (these don't have a .name property sadly)
+    let oa_assistants_obj = oac.assistants();
+    let oa_assistant_files_obj = oa_assistants_obj.files(assistant_id);
+    let assistant_files = oa_assistant_files_obj.list(DEFAULT_QUERY).await?.data;
+    // NOTE: We only want files that belong to the passed assistant_id,
+    // so we're going to create a HashSet<String>
+    // REF: "id": "file-abc123"
+    let assistant_file_ids: HashSet<String> =
+        assistant_files.into_iter().map(|f| f.id).collect();
+
+    // -- Get all files for org (these have .filename property)
+    let oa_files_obj = oac.files();
+    let org_files = oa_files_obj.list(DEFAULT_QUERY).await?.data;
+
+    // -- Build the k:v file_name:file_id HashMap
+    // Q: Iterator over org_files and map/filter to insert
+    // into our HashSet??
+    // U: Nope. Build a separate HashMap
+    // NOTE: .filter() takes a REFERENCE
+    // .map() takes based on .into()->REF, .into_iter()->OWNED
+    let file_id_by_name_hm: HashMap<String, FileId> = org_files
+        .into_iter()
+        .filter(|org_file| assistant_file_ids.contains(&org_file.id))
+        // NOTE: Should only have Assistant files at this point
+        // Q: How to now perform a HashMap.insert(org_file.filename)??
+        // A: We return sth (tuple) that can be collected into our HashMap<String, FileId>!
+        // org_file.id.into() -> FileId(String)
+        // REF: https://youtu.be/PHbCmIckV20?t=8670
+        .map(|org_file| (org_file.filename, org_file.id.into()))
+        .collect();
+
+    Ok(file_id_by_name_hm)
+}
+
+/// Uploads a file to an assistant (first to the org account, then attaches to asst)
+/// - `force` is `false`, will not upload the file if already uploaded.
+/// - `force` is `true`, it will delete existing file (account and asst), and upload.
+///
+/// Returns `(FileId, has_been_uploaded)`
+// NOTE: Again, this Assistant module is more lower-level compared
+// to the custom Laoshi/Agent module, so we need our Assistant
+// to support files before we implement into Laoshi module.
+// NOTE: Assistant know nothing about bundling files. It simply
+// will upload a file to OpenAI for a given AssistantId.
+pub async fn upload_file_by_name(
+    oac: &Client<OpenAIConfig>,
+    assistant_id: &AssistantId,
+    file: &SPath,
+    force: bool,
+) -> Result<(FileId, bool)> {
+    let file_name = file.file_name();
+
+    // Q: Get the HashMap of Assistant files and then
+    // look for a match on file_name?
+    // U: Kinda... Need to use if let Some(file_id) or if let Err(err) more...
+    let mut assistant_files_hm = get_files_hashmap(&oac, assistant_id).await?;
+    // Q: Why remove() instead of just get()?
+    // A: Because we need an owned Option<FileId> and don't need the HM afterwards.
+    // If we use get(), it gives a ref Option<&FileId> and then we'll need
+    // to figure out how to clone() it or something more complicated when
+    // we eventually return Ok((file_id, t/f)).
+    let file_id = assistant_files_hm.remove(file_name);
+
+    // -- If force is `false` and file already exists (uploaded), return early
+    if !force {
+        if let Some(file_id) = file_id {
+            return Ok((file_id, false));
+        }
+    }
+
+    // -- If file already exists (old) and force is true, delete file & assistant file association
+    if let Some(file_id) = file_id {
+        // -- Delete the org file
+        let oa_org_files_obj = oac.files();
+        if let Err(err) = oa_org_files_obj.delete(&file_id).await {
+            eprintln!("X Can't delete file '{}'\n    cause: {}", file_name, err);
+        }
+
+        // -- Delete the Assistant file association
+        let oa_assistants_obj = oac.assistants();
+        let oa_assistant_files_obj = oa_assistants_obj.files(assistant_id);
+        if let Err(err) = oa_assistant_files_obj.delete(&file_id).await {
+            eprintln!(
+                "X Can't delete assistant file '{}'\n    cause: {}",
+                file_name, err
+            )
+        }
+    }
+
+    // -- Upload file to OpenAI org account
+    // Use the terminal to display output to user
+    let term = Term::stdout();
+    term.write_line(&format!("* Uploading file '{}'", file_name))?;
+
+    // Upload file
+    let oa_org_files_obj = oac.files();
+    // Q: Use if let Err() or if let Some()?
+    let oa_org_file_obj = oa_org_files_obj
+        .create(CreateFileRequest {
+            file: file.into(),
+            purpose: "assistants".into(),
+        })
+        .await?;
+    // Update terminal print
+    term.clear_last_lines(1)?;
+    term.write_line(&format!("* Uploaded file '{}'", file_name))?;
+
+    // -- Attach file to specified Assistant
+    let oa_assistants_obj = oac.assistants();
+    let oa_assistant_files_obj = oa_assistants_obj.files(assistant_id);
+    let assistant_file_obj = oa_assistant_files_obj
+        .create(CreateAssistantFileRequest {
+            file_id: oa_org_file_obj.id.clone(),
+        })
+        .await?;
+
+    // -- Assert warning if org file doesn't match assistant file
+    if oa_org_file_obj.id != assistant_file_obj.id {
+        println!(
+            "SHOULD NOT HAPPEN! File id not matching {} {}",
+            oa_org_file_obj.id, assistant_file_obj.id
+        )
+    }
+
+    Ok((assistant_file_obj.id.into(), true))
+}
+
+// endregion:    -- Files

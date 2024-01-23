@@ -227,6 +227,8 @@ pub fn bundle_to_file(files: Vec<SFile>, dst_file: &SPath) -> Result<()> {
 // // endregion: --- File Utils
 //
 // // region:    --- XFile
+// NOTE: TIP! This is to normalize stuff for our
+// own purposes, so we're only working with `&str` types
 //
 // /// Trait that has methods that returns
 // /// the `&str` when ok, and when none or err, returns ""
@@ -237,6 +239,8 @@ pub fn bundle_to_file(files: Vec<SFile>, dst_file: &SPath) -> Result<()> {
 //
 // impl XFile for Path {
 // 	fn x_file_name(&self) -> &str {
+// NOTE: Lifetimes explanation about why "" works:
+// REF: https://youtu.be/PHbCmIckV20?t=8949
 // 		self.file_name().and_then(OsStr::to_str).unwrap_or("")
 // 	}
 //

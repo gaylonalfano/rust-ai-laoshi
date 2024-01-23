@@ -105,8 +105,6 @@ async fn start() -> Result<()> {
         }
     }
 
-    println!("->> laoshi {} - conv {conversation:?}", laoshi.name());
-
     Ok(())
 }
 
