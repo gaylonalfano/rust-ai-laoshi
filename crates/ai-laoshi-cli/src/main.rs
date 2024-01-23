@@ -37,6 +37,7 @@ const DEFAULT_DIR: &str = "laoshi";
 // Our app will have a loop that constantly does this.
 #[derive(Debug)]
 enum Cmd {
+    // TODO: Could add a Help cmd to display options
     Quit,
     Chat(String),
     RefreshAll,
@@ -91,6 +92,8 @@ async fn start() -> Result<()> {
 
         // Q: Match on Cmd and have agent take over?
         // Q: How to quit? How to refresh?
+        // A: The Cmd::from_input() captures the text input from the user,
+        // and we convert to a Cmd variant, which we then parse/match here.
         match cmd {
             Cmd::Chat(msg) => {
                 let res = laoshi.chat(&conversation, &msg).await?;
@@ -98,10 +101,23 @@ async fn start() -> Result<()> {
                 println!("{} {}", utils::cli::icon_res(), utils::cli::txt_res(res));
             }
             Cmd::Quit => break,
-            other => println!(
-                "{} command not supported: {other:?}",
-                utils::cli::icon_err()
-            ),
+            Cmd::RefreshAll => {
+                // NOTE:The init helper handles deleting/recreating assistant, instructions, files, etc.
+                laoshi = Laoshi::init_from_dir(DEFAULT_DIR, true).await?;
+                conversation = laoshi.load_or_create_conversation(true).await?;
+            }
+            Cmd::RefreshConversation => {
+                conversation = laoshi.load_or_create_conversation(true).await?;
+            }
+            Cmd::RefreshInstructions => {
+                laoshi.upload_instructions().await?;
+                // NOTE: ! Need to recreate the conversation!
+                conversation = laoshi.load_or_create_conversation(true).await?;
+            }
+            Cmd::RefreshFiles => {
+                laoshi.upload_files(true).await?;
+                conversation = laoshi.load_or_create_conversation(true).await?;
+            }
         }
     }
 
